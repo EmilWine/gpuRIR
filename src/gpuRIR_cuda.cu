@@ -520,7 +520,7 @@ __global__ void h2RIR_to_floatRIR_kernel(half2* h2RIR, scalar_t* floatRIR, int M
 /* Auxiliar host functions */
 /***************************/
 
-void gpuRIR_cuda::cuda_rirGenerator(scalar_t* rir, scalar_t* amp, scalar_t* tau, int M, int N, int T, scalar_t Fs) {
+void gpuRIR_cuda::cuda_rirGenerator(scalar_t* rir, scalar_t* amp, scalar_t* tau, int M, int N, int T, scalar_t Tw, scalar_t Fs) {
 	int initialReduction = initialReductionMin;
 	while (M * T * ceil((float)N/initialReduction) > 1e9) initialReduction *= 2;
 	
@@ -531,7 +531,8 @@ void gpuRIR_cuda::cuda_rirGenerator(scalar_t* rir, scalar_t* amp, scalar_t* tau,
 	scalar_t* initialRIR;
 	gpuErrchk( cudaMalloc(&initialRIR, M*T*iniRIR_N*sizeof(scalar_t)) );
 	
-	scalar_t Tw = 8e-3f * Fs; // Window duration [samples]
+	//scalar_t Tw = 8e-3f * Fs; // Window duration [samples]
+
 	generateRIR_kernel<<<numBlocksIni, threadsPerBlockIni>>>( initialRIR, amp, tau, T, M, N, iniRIR_N, initialReduction, Tw );
 	gpuErrchk( cudaDeviceSynchronize() );
 	gpuErrchk( cudaPeekAtLastError() );
@@ -562,7 +563,7 @@ void gpuRIR_cuda::cuda_rirGenerator(scalar_t* rir, scalar_t* amp, scalar_t* tau,
 	gpuErrchk( cudaFree(initialRIR) );
 }
 
-void cuda_rirGenerator_mp(scalar_t* rir, scalar_t* amp, scalar_t* tau, int M, int N, int T, scalar_t Fs) {
+void cuda_rirGenerator_mp(scalar_t* rir, scalar_t* amp, scalar_t* tau, int M, int N, int T, scalar_t Tw, scalar_t Fs) {
 	if (cuda_arch >= 530) {
 		int initialReduction = initialReductionMin;
 		while (M * T/2 * ceil((float)N/initialReduction) > 1e9) initialReduction *= 2;
@@ -574,13 +575,13 @@ void cuda_rirGenerator_mp(scalar_t* rir, scalar_t* amp, scalar_t* tau, int M, in
 		half2* initialRIR;
 		gpuErrchk( cudaMalloc(&initialRIR, M*(T/2)*iniRIR_N*sizeof(half2)) );
 
-		scalar_t Tw_2 = 8e-3f * Fs / 2;
+		scalar_t Tw_2 = Tw / 2;
 		#if CUDART_VERSION < 9020
 			// For CUDA versions older than 9.2 it is nos possible to call from host code __float2half2_rn,
 			// but doing it in the kernel is slower
-			scalar_t Tw_inv = 1.0f / (8e-3f * Fs);
+			scalar_t Tw_inv = 1.0f / Tw;
 		#else 
-			half2 Tw_inv = __float2half2_rn(1.0f / (8e-3f * Fs));
+			half2 Tw_inv = __float2half2_rn(1.0f / Tw);
 		#endif
 		generateRIR_mp_kernel<<<numBlocksIni, threadsPerBlockIni>>>( initialRIR, amp, tau, T/2, M, N, iniRIR_N, initialReduction, Fs, Tw_2, Tw_inv );
 		gpuErrchk( cudaDeviceSynchronize() );
@@ -654,7 +655,7 @@ int gpuRIR_cuda::PadData(scalar_t *signal, scalar_t **padded_signal, int segment
 
 scalar_t* gpuRIR_cuda::cuda_simulateRIR(scalar_t room_sz[3], scalar_t beta[6], scalar_t* h_pos_src, int M_src, 
 									   scalar_t* h_pos_rcv, scalar_t* h_orV_rcv, micPattern mic_pattern, int M_rcv, int nb_img[3],
-									   scalar_t Tdiff, scalar_t Tmax, scalar_t Fs, scalar_t c) {	
+									   scalar_t Tdiff, scalar_t Tmax, scalar_t Tw, scalar_t Fs, scalar_t c) {	
 	// function scalar_t* cuda_simulateRIR(scalar_t room_sz[3], scalar_t beta[6], scalar_t* h_pos_src, int M_src, 
 	//									   scalar_t* h_pos_rcv, scalar_t* h_orV_rcv, micPattern mic_pattern, int M_rcv, int nb_img[3],
 	//									   scalar_t Tdiff, scalar_t Tmax, scalar_t Fs, scalar_t c);
@@ -721,12 +722,12 @@ scalar_t* gpuRIR_cuda::cuda_simulateRIR(scalar_t room_sz[3], scalar_t beta[6], s
 	gpuErrchk( cudaMalloc(&rirISM, M*nSamplesISM*sizeof(scalar_t)) );
 	if (mixed_precision) {
 		if (cuda_arch >= 530) {
-			cuda_rirGenerator_mp(rirISM, amp, tau, M, N, nSamplesISM, Fs);
+			cuda_rirGenerator_mp(rirISM, amp, tau, M, N, nSamplesISM, Tw, Fs);
 		} else {
 			printf("The mixed precision requires Pascal GPU architecture or higher.\n");
 		}
 	} else {
-		cuda_rirGenerator(rirISM, amp, tau, M, N, nSamplesISM, Fs);
+		cuda_rirGenerator(rirISM, amp, tau, M, N, nSamplesISM, Tw, Fs);
 	}
 	
 	// Compute the exponential power envelope parammeters of each RIR

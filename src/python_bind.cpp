@@ -14,7 +14,7 @@ class gpuRIR_bind {
 	public:
 		gpuRIR_bind(bool mPrecision=false) : mixed_precision(mPrecision), gpuRIR_cuda_simulator(mPrecision) {};
 		
-		py::array simulateRIR_bind(std::vector<scalar_t>, std::vector<scalar_t>, py::array_t<scalar_t, py::array::c_style>, py::array_t<scalar_t, py::array::c_style>, py::array_t<scalar_t, py::array::c_style>, micPattern, std::vector<int> ,scalar_t, scalar_t, scalar_t, scalar_t);
+		py::array simulateRIR_bind(std::vector<scalar_t>, std::vector<scalar_t>, py::array_t<scalar_t, py::array::c_style>, py::array_t<scalar_t, py::array::c_style>, py::array_t<scalar_t, py::array::c_style>, micPattern, std::vector<int> ,scalar_t, scalar_t, scalar_t, scalar_t, scalar_t);
 		py::array gpu_conv(py::array_t<scalar_t, py::array::c_style>, py::array_t<scalar_t, py::array::c_style>);
 		bool activate_mixed_precision_bind(bool);
 		
@@ -33,6 +33,7 @@ py::array gpuRIR_bind::simulateRIR_bind(std::vector<scalar_t> room_sz, // Size o
 										std::vector<int> nb_img, // Number of sources in each dimension
 										scalar_t Tdiff, // Time when the ISM is replaced by a diffusse reverberation model [s]
 										scalar_t Tmax, // RIRs length [s]
+										scalar_t Tw, // Window len [samps]
 										scalar_t Fs, // Sampling frequency [Hz]
 										scalar_t c=343.0 // Speed of sound [m/s]
 									   ) 
@@ -58,7 +59,7 @@ py::array gpuRIR_bind::simulateRIR_bind(std::vector<scalar_t> room_sz, // Size o
 	scalar_t* rir = gpuRIR_cuda_simulator.cuda_simulateRIR(&room_sz[0], &beta[0], 
 														   (scalar_t*) info_pos_src.ptr, M_src, 
 														   (scalar_t*) info_pos_rcv.ptr, (scalar_t*) info_orV_rcv.ptr, mic_pattern, M_rcv, 
-														   &nb_img[0], Tdiff, Tmax, Fs, c);
+														   &nb_img[0], Tdiff, Tmax, Tw, Fs, c);
 
 	py::capsule free_when_done(rir, [](void *f) {
 		scalar_t *foo = reinterpret_cast<scalar_t *>(f);
@@ -117,7 +118,7 @@ PYBIND11_MODULE(gpuRIR_bind,m)
         .def(py::init<bool &>(), py::arg("mixed_precision")=false)
         .def("simulateRIR_bind", &gpuRIR_bind::simulateRIR_bind, "RIR simulation", py::arg("room_sz"), py::arg("beta"), py::arg("pos_src"), 
 			 py::arg("pos_rcv"), py::arg("orV_rcv"), py::arg("mic_pattern"), py::arg("nb_img"), py::arg("Tdiff"), py::arg("Tmax"), 
-			 py::arg("Fs"), py::arg("c")=343.0f )
+			 py::arg("Tw"),py::arg("Fs"), py::arg("c")=343.0f )
 		.def("gpu_conv", &gpuRIR_bind::gpu_conv, "Batched convolution using FFTs in GPU", py::arg("source_segments"), py::arg("RIR"))
 		.def("activate_mixed_precision_bind", &gpuRIR_bind::activate_mixed_precision_bind, "Activate the mixed precision mode, only for Pascal GPU architecture or superior",
 			 py::arg("activate"));

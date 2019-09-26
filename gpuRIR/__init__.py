@@ -92,7 +92,7 @@ def t2n(T, rooms_sz, c=343.0):
 	nb_img = 2 * T / (np.array(rooms_sz) / c)
 	return [ int(n) for n in np.ceil(nb_img) ]
 
-def simulateRIR(room_sz, beta, pos_src, pos_rcv, nb_img, Tmax, fs, Tdiff=None, mic_pattern="omni", orV_rcv=None, c=343.0):
+def simulateRIR(room_sz, beta, pos_src, pos_rcv, nb_img, Tmax, Tw, fs, Tdiff=None, mic_pattern="omni", orV_rcv=None, c=343.0):
 	''' Room Impulse Responses (RIRs) simulation using the Image Source Method (ISM).
 
 	Parameters
@@ -109,6 +109,8 @@ def simulateRIR(room_sz, beta, pos_src, pos_rcv, nb_img, Tmax, fs, Tdiff=None, m
 		Number of images to simulate in each dimension.
 	Tmax : float
 		RIRs length (in seconds).
+	Tw : float
+		Smoothing window length [samps].
 	fs : float
 		RIRs sampling frequency (in Hertz).
 	Tdiff : float, optional
@@ -153,7 +155,7 @@ def simulateRIR(room_sz, beta, pos_src, pos_rcv, nb_img, Tmax, fs, Tdiff=None, m
 	if orV_rcv is None: orV_rcv = np.zeros_like(pos_rcv)
 	else: orV_rcv = orV_rcv.astype('float32', order='C', copy=False)
 		
-	return gpuRIR_bind_simulator.simulateRIR_bind(room_sz, beta, pos_src, pos_rcv, orV_rcv, mic_patterns[mic_pattern], nb_img, Tdiff, Tmax, fs, c)
+	return gpuRIR_bind_simulator.simulateRIR_bind(room_sz, beta, pos_src, pos_rcv, orV_rcv, mic_patterns[mic_pattern], nb_img, Tdiff, Tmax, Tw, fs, c)
 
 def simulateTrajectory(source_signal, RIRs, timestamps=None, fs=None):
 	''' Filter an audio signal by the RIRs of a motion trajectory recorded with a microphone array.

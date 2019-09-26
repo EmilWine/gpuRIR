@@ -22,13 +22,14 @@ abs_weights = [0.9]*5+[0.5] # Absortion coefficient ratios of the walls
 T60 = 1.0	 # Time for the RIR to reach 60dB of attenuation [s]
 att_diff = 15.0	# Attenuation when start using the diffuse reverberation model [dB]
 att_max = 60.0 # Attenuation at the end of the simulation [dB]
+Tw = 11 #Smoothing window len
 fs=16000.0 # Sampling frequency [Hz]
 
 beta = gpuRIR.beta_SabineEstimation(room_sz, T60, abs_weights=abs_weights) # Reflection coefficients
 Tdiff= gpuRIR.att2t_SabineEstimator(att_diff, T60) # Time to start the diffuse reverberation model [s]
 Tmax = gpuRIR.att2t_SabineEstimator(att_max, T60)	 # Time to stop the simulation [s]
 nb_img = gpuRIR.t2n( Tdiff, room_sz )	# Number of image sources in each dimension
-RIRs = gpuRIR.simulateRIR(room_sz, beta, pos_src, pos_rcv, nb_img, Tmax, fs, Tdiff=Tdiff, orV_rcv=orV_rcv, mic_pattern=mic_pattern)
+RIRs = gpuRIR.simulateRIR(room_sz, beta, pos_src, pos_rcv, nb_img, Tmax, Tw, fs, Tdiff=Tdiff, orV_rcv=orV_rcv, mic_pattern=mic_pattern)
 
 t = np.arange(int(ceil(Tmax * fs))) / fs
 plt.plot(t, RIRs.reshape(nb_src*nb_rcv, -1).transpose())

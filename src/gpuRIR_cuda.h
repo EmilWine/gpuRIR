@@ -21,7 +21,7 @@ class gpuRIR_cuda {
 	public:
 		gpuRIR_cuda(bool);
 
-		scalar_t* cuda_simulateRIR(scalar_t[3], scalar_t[6], scalar_t*, int, scalar_t*, scalar_t*, micPattern, int, int[3], scalar_t, scalar_t, scalar_t, scalar_t);
+		scalar_t* cuda_simulateRIR(scalar_t[3], scalar_t[6], scalar_t*, int, scalar_t*, scalar_t*, micPattern, int, int[3], scalar_t, scalar_t, scalar_t, scalar_t, scalar_t);
 		scalar_t* cuda_convolutions(scalar_t*, int, int,scalar_t*, int, int);
 		bool activate_mixed_precision(bool);
 		
@@ -33,6 +33,6 @@ class gpuRIR_cuda {
 		bool mixed_precision;
 
 		// Auxiliar host functions
-		void cuda_rirGenerator(scalar_t*, scalar_t*, scalar_t*, int, int, int, scalar_t);
+		void cuda_rirGenerator(scalar_t*, scalar_t*, scalar_t*, int, int, int, scalar_t,  scalar_t);
 		int PadData(scalar_t*, scalar_t**, int, scalar_t*, scalar_t**, int, int, int);
 };
