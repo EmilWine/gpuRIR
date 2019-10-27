@@ -8,7 +8,7 @@ from scipy.signal import convolve
 
 from gpuRIR_bind import gpuRIR_bind
 
-__all__ = ["mic_patterns", "beta_SabineEstimation", "att2t_SabineEstimator", "t2n", "simulateRIR", "simulateTrajectory", "activate_mixed_precision"]
+__all__ = ["mic_patterns", "beta_SabineEstimation", "att2t_SabineEstimator", "t2n", "simulateRIR", "simulateTaus", "simulateTrajectory", "activate_mixed_precision"]
 
 mic_patterns =	{
   "omni": 0,
@@ -91,6 +91,62 @@ def t2n(T, rooms_sz, c=343.0):
 	'''
 	nb_img = 2 * T / (np.array(rooms_sz) / c)
 	return [ int(n) for n in np.ceil(nb_img) ]
+
+def simulateTaus(room_sz, beta, pos_src, pos_rcv, nb_img, fs, mic_pattern="omni", orV_rcv=None, c=343.0):
+	''' Reflection times using the Image Source Method (ISM).
+
+	Parameters
+	----------
+	room_sz : array_like with 3 elements
+		Size of the room (in meters).
+	beta : array_like with 6 elements
+		Reflection coefficients of the walls as $[beta_{x0}, beta_{x1}, beta_{y0}, beta_{y1}, beta_{z0}, beta_{z1}]$,
+		where $beta_{x0}$ is the coeffcient of the wall parallel to the x axis closest
+		to the origin of coordinates system and $beta_{x1}$ the farthest.
+	pos_src, pos_rcv : ndarray with 2 dimensions and 3 columns
+		Position of the sources and the receivers (in meters).
+	nb_img : array_like with 3 integer elements
+		Number of images to simulate in each dimension.
+	fs : float
+		RIRs sampling frequency (in Hertz).
+	mic_pattern : {"omni", "homni", "card", "hypcard", "subcard", "bidir"}, optional
+		Polar pattern of the receivers (the same for all of them).
+			"omni" : Omnidireccional (default).
+			"homni": Half omnidireccional, 1 in front of the microphone, 0 backwards.
+			"card": Cardioid.
+			"hypcard": Hypercardioid.
+			"subcard": Subcardioid.
+			"bidir": Bidirectional, a.k.a. figure 8.
+	orV_rcv : ndarray with 2 dimensions and 3 columns or None, optional
+		Orientation of the receivers as vectors pointing in the same direction.
+		None (default) is only valid for omnidireccional patterns.
+	c : float, optional
+		Speed of sound [m/s] (the default is 343.0).
+
+	Returns
+	-------
+	3D ndarray
+		The first axis is the source, the second the receiver and the third the time.
+
+	Warnings
+	--------
+	Asking for too much and too long RIRs (specially for full ISM simulations) may exceed
+	the GPU memory and crash the kernel.
+
+	'''
+	assert np.sum(pos_src >= room_sz) == 0, "The sources must be inside the room"
+	assert np.sum(pos_rcv >= room_sz) == 0, "The receivers must be inside the room"
+	assert mic_pattern in mic_patterns, "mic_pattern must be omni, homni, card, hypcard, subcard or bidir"
+	assert mic_pattern is "omni" or orV_rcv is not None, "the mics are not omni but their orientation is undefined"
+	
+	pos_src = pos_src.astype('float32', order='C', copy=False)
+	pos_rcv = pos_rcv.astype('float32', order='C', copy=False)
+	
+	if mic_pattern is None: mic_pattern = "omni"
+	if orV_rcv is None: orV_rcv = np.zeros_like(pos_rcv)
+	else: orV_rcv = orV_rcv.astype('float32', order='C', copy=False)
+		
+	return gpuRIR_bind_simulator.getTaus_bind(room_sz, beta, pos_src, pos_rcv, orV_rcv, mic_patterns[mic_pattern], nb_img, fs, c)
 
 def simulateRIR(room_sz, beta, pos_src, pos_rcv, nb_img, Tmax, Tw, fs, Tdiff=None, mic_pattern="omni", orV_rcv=None, c=343.0):
 	''' Room Impulse Responses (RIRs) simulation using the Image Source Method (ISM).

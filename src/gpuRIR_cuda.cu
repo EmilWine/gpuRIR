@@ -649,6 +649,52 @@ int gpuRIR_cuda::PadData(scalar_t *signal, scalar_t **padded_signal, int segment
     return N_fft;
 }
 
+
+scalar_t* gpuRIR_cuda::cuda_getTaus(scalar_t room_sz[3], scalar_t beta[6], scalar_t* h_pos_src, int M_src, 
+									   scalar_t* h_pos_rcv, scalar_t* h_orV_rcv, micPattern mic_pattern, int M_rcv, int nb_img[3],
+									   scalar_t Fs, scalar_t c) {	
+
+	// Copy host memory to GPU
+	scalar_t *pos_src, *pos_rcv, *orV_rcv;
+	gpuErrchk( cudaMalloc(&pos_src, M_src*3*sizeof(scalar_t)) );
+	gpuErrchk( cudaMalloc(&pos_rcv, M_rcv*3*sizeof(scalar_t)) );
+	gpuErrchk( cudaMalloc(&orV_rcv, M_rcv*3*sizeof(scalar_t)) );
+	gpuErrchk( cudaMemcpy(pos_src, h_pos_src, M_src*3*sizeof(scalar_t), cudaMemcpyHostToDevice ) );
+	gpuErrchk( cudaMemcpy(pos_rcv, h_pos_rcv, M_rcv*3*sizeof(scalar_t), cudaMemcpyHostToDevice ) );
+	gpuErrchk( cudaMemcpy(orV_rcv, h_orV_rcv, M_rcv*3*sizeof(scalar_t), cudaMemcpyHostToDevice ) );
+	
+	
+	// Use the ISM to calculate the amplitude and delay of each image
+	dim3 threadsPerBlockISM(nThreadsISM_x, nThreadsISM_y, nThreadsISM_z);
+	dim3 numBlocksISM(ceil((float)nb_img[0] / nThreadsISM_x), 
+					  ceil((float)nb_img[1] / nThreadsISM_y), 
+					  ceil((float)nb_img[2] / nThreadsISM_z));
+	int shMemISM = (M_src + 2*M_rcv) * 3 * sizeof(scalar_t);
+	
+	scalar_t* amp; // Amplitude with which the signals from each image source of each source arrive to each receiver
+	gpuErrchk( cudaMalloc(&amp, M_src*M_rcv*nb_img[0]*nb_img[1]*nb_img[2]*sizeof(scalar_t)) );
+	scalar_t* tau; // Delay with which the signals from each image source of each source arrive to each receiver
+	gpuErrchk( cudaMalloc(&tau, M_src*M_rcv*nb_img[0]*nb_img[1]*nb_img[2]*sizeof(scalar_t)) );
+	scalar_t* tau_dp; // Direct path delay
+	gpuErrchk( cudaMalloc(&tau_dp, M_src*M_rcv*sizeof(scalar_t)) );
+
+	calcAmpTau_kernel<<<numBlocksISM, threadsPerBlockISM, shMemISM>>> (
+		amp, tau, tau_dp,
+		pos_src, pos_rcv, orV_rcv, mic_pattern,
+		room_sz[0], room_sz[1], room_sz[2], 
+		beta[0], beta[1], beta[2], beta[3], beta[4], beta[5], 
+		nb_img[0], nb_img[1], nb_img[2],
+		M_src, M_rcv, c, Fs
+	);
+	gpuErrchk( cudaFree(pos_src) );
+	gpuErrchk( cudaFree(pos_rcv) );
+	gpuErrchk( cudaFree(orV_rcv) );
+	gpuErrchk( cudaFree(amp)	 );
+	//gpuErrchk( cudaFree(tau)	 );
+	gpuErrchk( cudaFree(tau_dp)	 );
+	return tau;
+}
+
 /***********************/
 /* Principal functions */
 /***********************/
