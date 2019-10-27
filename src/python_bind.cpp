@@ -53,12 +53,12 @@ py::array gpuRIR_bind::getTaus_bind(std::vector<scalar_t> room_sz, // Size of th
 	assert(info_pos_rcv.shape[0] == info_orV_rcv.shape[0]);
 	int M_src = info_pos_src.shape[0];
 	int M_rcv = info_pos_rcv.shape[0];
+
 	
 	scalar_t* taus = gpuRIR_cuda_simulator.cuda_getTaus(&room_sz[0], &beta[0], 
-														   (scalar_t*) info_pos_src.ptr, M_src, 
+															   (scalar_t*) info_pos_src.ptr, M_src, 
 														   (scalar_t*) info_pos_rcv.ptr, (scalar_t*) info_orV_rcv.ptr, mic_pattern, M_rcv, 
 														   &nb_img[0], Fs, c);
-
 	py::capsule free_when_done(taus, [](void *f) {
 		scalar_t *foo = reinterpret_cast<scalar_t *>(f);
 		delete[] foo;
@@ -67,6 +67,7 @@ py::array gpuRIR_bind::getTaus_bind(std::vector<scalar_t> room_sz, // Size of th
 	int nSamples = nb_img[0]*nb_img[1]*nb_img[2];
 	std::vector<int> shape = {M_src, M_rcv, nSamples};
 	std::vector<size_t> strides = {M_rcv*nSamples*sizeof(scalar_t), nSamples*sizeof(scalar_t), sizeof(scalar_t)};
+
 	return py::array_t<scalar_t>(shape, strides, taus, free_when_done);
 }
 

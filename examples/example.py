@@ -29,8 +29,12 @@ beta = gpuRIR.beta_SabineEstimation(room_sz, T60, abs_weights=abs_weights) # Ref
 Tdiff= gpuRIR.att2t_SabineEstimator(att_diff, T60) # Time to start the diffuse reverberation model [s]
 Tmax = gpuRIR.att2t_SabineEstimator(att_max, T60)	 # Time to stop the simulation [s]
 nb_img = gpuRIR.t2n( Tdiff, room_sz )	# Number of image sources in each dimension
+#from ipdb import set_trace as dbg
+#dbg()
+Taus = gpuRIR.simulateTaus(room_sz, beta, pos_src, pos_rcv, nb_img,  fs,  orV_rcv=orV_rcv, mic_pattern=mic_pattern)
 RIRs = gpuRIR.simulateRIR(room_sz, beta, pos_src, pos_rcv, nb_img, Tmax, Tw, fs, Tdiff=Tdiff, orV_rcv=orV_rcv, mic_pattern=mic_pattern)
 
+print(Taus)
 t = np.arange(int(ceil(Tmax * fs))) / fs
 plt.plot(t, RIRs.reshape(nb_src*nb_rcv, -1).transpose())
 plt.show()

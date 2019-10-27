@@ -653,7 +653,6 @@ int gpuRIR_cuda::PadData(scalar_t *signal, scalar_t **padded_signal, int segment
 scalar_t* gpuRIR_cuda::cuda_getTaus(scalar_t room_sz[3], scalar_t beta[6], scalar_t* h_pos_src, int M_src, 
 									   scalar_t* h_pos_rcv, scalar_t* h_orV_rcv, micPattern mic_pattern, int M_rcv, int nb_img[3],
 									   scalar_t Fs, scalar_t c) {	
-
 	// Copy host memory to GPU
 	scalar_t *pos_src, *pos_rcv, *orV_rcv;
 	gpuErrchk( cudaMalloc(&pos_src, M_src*3*sizeof(scalar_t)) );
@@ -670,11 +669,14 @@ scalar_t* gpuRIR_cuda::cuda_getTaus(scalar_t room_sz[3], scalar_t beta[6], scala
 					  ceil((float)nb_img[1] / nThreadsISM_y), 
 					  ceil((float)nb_img[2] / nThreadsISM_z));
 	int shMemISM = (M_src + 2*M_rcv) * 3 * sizeof(scalar_t);
+
+	int nb_samples = nb_img[0]*nb_img[1]*nb_img[2];
+	int tau_size = M_src*M_rcv*nb_samples*sizeof(scalar_t);
 	
 	scalar_t* amp; // Amplitude with which the signals from each image source of each source arrive to each receiver
-	gpuErrchk( cudaMalloc(&amp, M_src*M_rcv*nb_img[0]*nb_img[1]*nb_img[2]*sizeof(scalar_t)) );
+	gpuErrchk( cudaMalloc(&amp, tau_size));
 	scalar_t* tau; // Delay with which the signals from each image source of each source arrive to each receiver
-	gpuErrchk( cudaMalloc(&tau, M_src*M_rcv*nb_img[0]*nb_img[1]*nb_img[2]*sizeof(scalar_t)) );
+	gpuErrchk( cudaMalloc(&tau, tau_size));
 	scalar_t* tau_dp; // Direct path delay
 	gpuErrchk( cudaMalloc(&tau_dp, M_src*M_rcv*sizeof(scalar_t)) );
 
@@ -686,13 +688,33 @@ scalar_t* gpuRIR_cuda::cuda_getTaus(scalar_t room_sz[3], scalar_t beta[6], scala
 		nb_img[0], nb_img[1], nb_img[2],
 		M_src, M_rcv, c, Fs
 	);
+	
+	// Copy GPU memory to host
+	scalar_t* tau_cpu = (scalar_t*) malloc(tau_size);
+	
+	cudaPitchedPtr tau_pitchedPtr = make_cudaPitchedPtr( (void*) tau, 
+		nb_samples*sizeof(scalar_t), nb_samples, M_rcv );
+
+	cudaPitchedPtr tau_cpu_pitchedPtr = make_cudaPitchedPtr( (void*) tau_cpu, 
+		nb_samples*sizeof(scalar_t), nb_samples, M_rcv );
+
+	cudaMemcpy3DParms cpy_params = {0};
+	cpy_params.srcPtr = tau_pitchedPtr;
+	cpy_params.dstPtr = tau_cpu_pitchedPtr;
+	cpy_params.extent = make_cudaExtent(nb_samples*sizeof(scalar_t), M_rcv, M_src);
+	cpy_params.kind = cudaMemcpyDeviceToHost;
+	gpuErrchk( cudaMemcpy3D(&cpy_params) );
+	
+
+	gpuErrchk( cudaDeviceSynchronize() );
+	gpuErrchk( cudaPeekAtLastError() );
+
 	gpuErrchk( cudaFree(pos_src) );
 	gpuErrchk( cudaFree(pos_rcv) );
 	gpuErrchk( cudaFree(orV_rcv) );
 	gpuErrchk( cudaFree(amp)	 );
-	//gpuErrchk( cudaFree(tau)	 );
 	gpuErrchk( cudaFree(tau_dp)	 );
-	return tau;
+	return tau_cpu;
 }
 
 /***********************/

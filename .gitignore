@@ -42,3 +42,8 @@ Thumbs.db
 build/
 dist/
 gpuRIR.egg-info/
+gpuRIR/__pycache__/
+#other#
+#
+*.swp
+tags
